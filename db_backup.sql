@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 9gZ1SG2QchoalWZEAN2OrbXSeBN2qnEzOY37GlOUpEgYIsuKlcLZyhYlH6NSShL
+\restrict JjzAK0R8wIqDdJWtMx05yWG4j5SnH4IP2F7ujYftObsiYpJn4JU6gqh8rfILufC
 
 -- Dumped from database version 14.23 (Ubuntu 14.23-0ubuntu0.22.04.1)
 -- Dumped by pg_dump version 14.23 (Ubuntu 14.23-0ubuntu0.22.04.1)
@@ -518,5 +518,5 @@ GRANT SELECT,USAGE ON SEQUENCE public.user_stores_id_seq TO woommo;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 9gZ1SG2QchoalWZEAN2OrbXSeBN2qnEzOY37GlOUpEgYIsuKlcLZyhYlH6NSShL
+\unrestrict JjzAK0R8wIqDdJWtMx05yWG4j5SnH4IP2F7ujYftObsiYpJn4JU6gqh8rfILufC
 
