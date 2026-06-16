@@ -1,0 +1,93 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: woommo
+      POSTGRES_USER: woommo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U woommo"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 2
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://woommo:${POSTGRES_PASSWORD}@postgres:5432/woommo
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_TMP_DIR: /tmp/woommo_uploads
+    volumes:
+      - upload_tmp:/tmp/woommo_uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: always
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2 --queues=celery --hostname=default@%h
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://woommo:${POSTGRES_PASSWORD}@postgres:5432/woommo
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_TMP_DIR: /tmp/woommo_uploads
+    volumes:
+      - upload_tmp:/tmp/woommo_uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  worker-upload:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: always
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --queues=upload --hostname=upload@%h
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://woommo:${POSTGRES_PASSWORD}@postgres:5432/woommo
+      REDIS_URL: redis://redis:6379/0
+      UPLOAD_TMP_DIR: /tmp/woommo_uploads
+    volumes:
+      - upload_tmp:/tmp/woommo_uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+volumes:
+  postgres_data:
+  redis_data:
+  upload_tmp:
