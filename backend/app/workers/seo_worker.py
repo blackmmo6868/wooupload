@@ -1,0 +1,169 @@
+"""
+WooMMO Web — SEO Worker (Celery Task)
+Port từ BulkSEOWorker của desktop app
+"""
+import sys, json
+sys.path.insert(0, "/opt/woommo/backend")
+sys.path.insert(0, "/opt/woommo/logic")
+
+from app.workers.celery_app import celery_app
+from app.models.database import SessionLocal, Job
+from app.core.config import WC_URL, WC_USERNAME, WC_APP_PASSWORD
+from app.services.settings_service import get_all_settings_raw
+
+from woocommerce_api import WooCommerceAPI
+from seo_generator  import SEOGenerator
+
+
+def _update_job(job_id: int, status: str, log_line: str = "", result: dict = None):
+    db = SessionLocal()
+    try:
+        job = db.query(Job).filter_by(id=job_id).first()
+        if job:
+            job.status = status
+            job.log   += log_line + "\n" if log_line else ""
+            if result is not None:
+                job.result = result
+            db.commit()
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="seo.bulk_generate")
+def task_seo_bulk(self, job_id: int, product_ids: list,
+                  skip_existing: bool = True, wc_url: str = None,
+                  wc_user: str = None, wc_pass: str = None,
+                  user_id: int = None, store_id: int = None):
+    """
+    Bulk generate SEO description + snippet cho danh sách product IDs.
+    product_ids: list[int] — WooCommerce product IDs
+    store_name:  override store name dùng trong content (nếu None → dùng global setting)
+    """
+    _update_job(job_id, "running", "🤖 Khởi động SEO generator...")
+
+    db = SessionLocal()
+    try:
+        cfg = get_all_settings_raw(db)
+    finally:
+        db.close()
+
+    openai_key  = cfg.get("openai_key", "")
+    model       = cfg.get("openai_model", "gpt-4o")
+    shortcode   = cfg.get("custom_shortcode", "[thien_display_single_image]")
+    # Lấy link_config theo user + store
+    db_lc = SessionLocal()
+    try:
+        from app.models.database import Settings as SettingsModel
+        # Nếu store_id=0 thì tìm theo wc_url
+        _eff_store_id = store_id or 0
+        if not _eff_store_id and wc_url:
+            from app.models.database import Store as _Store
+            _sr = db_lc.query(_Store).filter_by(wc_url=wc_url).first()
+            if _sr: _eff_store_id = _sr.id
+        lc_key = f"link_config_user_{user_id}_store_{_eff_store_id}"
+        lc_row = db_lc.query(SettingsModel).filter_by(key=lc_key).first()
+        if not lc_row and _eff_store_id:
+            # fallback không có store
+            lc_key2 = f"link_config_user_{user_id}"
+            lc_row = db_lc.query(SettingsModel).filter_by(key=lc_key2).first()
+        link_config = json.loads(lc_row.value if lc_row else "{}") or {}
+    finally:
+        db_lc.close()
+
+    # store_name: ưu tiên param truyền vào, fallback về global settings
+    # Lấy store_name từ Store record theo wc_url
+    from app.models.database import Store as StoreModel
+    db2 = SessionLocal()
+    try:
+        store_rec = db2.query(StoreModel).filter_by(wc_url=wc_url).first()
+        effective_store_name = store_rec.store_name if store_rec else cfg.get("store_name", "")
+    finally:
+        db2.close()
+    _update_job(job_id, "running", f"🏪 Store name: {effective_store_name}")
+
+    if not openai_key:
+        _update_job(job_id, "failed", "❌ Chưa cấu hình OpenAI API key",
+                    result={"error": "missing openai_key"})
+        return
+
+    api = WooCommerceAPI(wc_url, wc_user, wc_pass)
+    gen = SEOGenerator(openai_key=openai_key, model=model,
+                       store_name=effective_store_name, shortcode=shortcode)
+
+    # Fetch product list từ WooCommerce
+    _update_job(job_id, "running", "📦 Đang lấy danh sách sản phẩm từ WooCommerce...")
+    all_products = api.get_all_products(status="any")
+    products = [p for p in all_products if p.get("id") in product_ids] if product_ids else all_products
+
+    total    = len(products)
+    done     = 0
+    failed   = 0
+    skipped  = 0
+    errors   = []
+    rr_index = 0
+
+    for i, p in enumerate(products):
+        pid   = p["id"]
+        name  = p.get("name", "")
+        desc  = p.get("description", "")
+
+        self.update_state(
+            state="PROGRESS",
+            meta={"current": i + 1, "total": total, "message": f"[{i+1}/{total}] {name}"}
+        )
+
+        if skip_existing and len(desc.strip()) > 100:
+            _update_job(job_id, "running", f"⏭ [{i+1}/{total}] Bỏ qua (đã có mô tả): {name}")
+            skipped += 1
+            continue
+
+        cat_name = ""
+        cats = p.get("categories", [])
+        if cats:
+            cat_name = cats[0].get("name", "")
+
+        result = gen.generate_and_update(
+            wc_api=api,
+            product_id=pid,
+            product_name=name,
+            category=cat_name,
+            link_config=link_config,
+            round_robin_index=rr_index,
+            progress_callback=lambda msg: _update_job(job_id, "running", msg),
+        )
+        rr_index += 1
+
+        if result["success"]:
+            done += 1
+            _update_job(job_id, "running", f"✅ [{i+1}/{total}] Done: {name}")
+        else:
+            failed += 1
+            err = result.get("error", "unknown")
+            errors.append({"product": name, "error": err})
+            _update_job(job_id, "running", f"❌ [{i+1}/{total}] Lỗi: {name} — {err}")
+
+    summary = {"total": total, "done": done, "failed": failed,
+               "skipped": skipped, "errors": errors[:20]}
+    _update_job(job_id, "done",
+                f"✅ SEO hoàn thành: {done}/{total} sản phẩm",
+                result=summary)
+
+    # ── Auto publish ─────────────────────────────────────────────────────────
+    db_job = SessionLocal()
+    try:
+        job_rec = db_job.query(Job).filter_by(id=job_id).first()
+        auto_publish = (job_rec.params or {}).get("auto_publish", False) if job_rec else False
+    finally:
+        db_job.close()
+
+    if auto_publish and product_ids:
+        _update_job(job_id, "done", f"🌐 Auto publish {len(product_ids)} SP...")
+        api2 = WooCommerceAPI(wc_url, wc_user, wc_pass)
+        for pid in product_ids:
+            try:
+                api2.update_product(pid, {"status": "publish"})
+            except Exception as e:
+                _update_job(job_id, "done", f"  ⚠️ Publish lỗi #{pid}: {e}")
+        _update_job(job_id, "done", "✅ Đã publish tất cả SP")
+
+    return summary
