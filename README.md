@@ -12,6 +12,7 @@ apt-get install -y docker-compose-plugin
 
 ## Buoc 2: Clone repo
 ```bash
+cd /opt
 git clone https://github.com/blackmmo6868/wooupload.git
 cd wooupload
 ```
@@ -23,59 +24,35 @@ nano .env
 # Sua: POSTGRES_PASSWORD, SECRET_KEY, ADMIN_PASSWORD
 ```
 
-## Buoc 4: Doi port frontend tranh xung dot voi Nginx
-```bash
-sed -i 's/"80:80"/"8080:80"/' docker-compose.yml
-```
-
-## Buoc 5: Build va chay
+## Buoc 4: Build va chay
 ```bash
 docker compose up -d --build
 ```
 
-## Buoc 6: Import database
+## Buoc 5: Import database
 ```bash
 cat db_backup.sql | docker compose exec -T postgres psql -U woommo woommo
 ```
 
-## Buoc 7: Cai Nginx SSL
+## Buoc 6: Cai Nginx SSL
 ```bash
 apt install nginx certbot python3-certbot-nginx -y
 
-cat > /etc/nginx/sites-available/woommo << NGINX
-server {
-    listen 80;
-    server_name your.domain.com;
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        client_max_body_size 500M;
-        proxy_read_timeout 300s;
-    }
-}
-NGINX
-
-ln -s /etc/nginx/sites-available/woommo /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
+ln -sf /opt/wooupload/nginx.host.conf /etc/nginx/sites-available/wooupload
+ln -sf /etc/nginx/sites-available/wooupload /etc/nginx/sites-enabled/
 nginx -t && systemctl reload nginx
-certbot --nginx -d your.domain.com
+certbot --nginx -d upload.diethero.shop
 ```
 
-## Buoc 8: Truy cap
-- URL: https://your.domain.com
+## Buoc 7: Truy cap
+- URL: https://upload.diethero.shop
 - Username: admin
 - Password: Aa221122@ (neu dung db_backup.sql)
-
-## Buoc 9: Cau hinh sau dang nhap
-1. Admin > Quan ly Store - Kiem tra store da co chua
-2. Admin > Cai dat - Nhap lai OpenAI API Key
-3. Internal Link - Kiem tra link config
 
 ## Cac lenh hay dung
 ```bash
 # Update code
-cd ~/wooupload && git pull && docker compose up -d --build
+cd /opt/wooupload && git pull && docker compose up -d --build
 
 # Backup DB va push GitHub
 docker compose exec postgres pg_dump -U woommo woommo > db_backup.sql
