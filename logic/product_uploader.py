@@ -57,7 +57,7 @@ class ProductUploader:
                 import subprocess
                 result = subprocess.run(
                     ["/usr/bin/unar", "-o", extract_to, "-force-overwrite", zip_path],
-                    capture_output=True
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                 )
                 if result.returncode != 0:
                     # Fallback: dùng unrar
@@ -103,7 +103,7 @@ class ProductUploader:
 
         products = []
 
-        for folder_name in sorted(os.listdir(root)):
+        for folder_name in sorted([f for f in os.listdir(root)]):
             folder_path = os.path.join(root, folder_name)
             if not os.path.isdir(folder_path):
                 continue
