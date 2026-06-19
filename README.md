@@ -65,3 +65,12 @@ docker compose logs worker-upload -f
 # Restart
 docker compose restart
 ```
+
+## Lưu ý sau khi chạy Certbot
+Certbot sẽ xóa `client_max_body_size` và `proxy_read_timeout` khỏi Nginx config.
+Chạy lại lệnh này sau mỗi lần certbot renew:
+
+```bash
+sed -i 's|proxy_set_header   X-Forwarded-Proto $scheme;|proxy_set_header   X-Forwarded-Proto $scheme;\n        client_max_body_size 500M;\n        proxy_read_timeout 300s;|' /etc/nginx/sites-available/wooupload
+nginx -t && systemctl reload nginx
+```
