@@ -59,18 +59,14 @@ class ProductUploader:
                     ["/usr/bin/unar", "-o", extract_to, "-force-overwrite", zip_path],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                 )
-                if result.returncode != 0:
-                    # Fallback: dùng unrar
-                    result2 = subprocess.run(
-                        ["/usr/bin/unrar", "x", "-y", zip_path, extract_to + "/"],
-                        capture_output=True
-                    )
-                    if result2.returncode != 0:
-                        raise Exception(result2.stderr.decode("utf-8", errors="replace")[:200])
+                if result.returncode not in (0, 1):
+                    raise Exception(f"unar failed with code {result.returncode}")
             except FileNotFoundError:
                 raise Exception("Không tìm thấy tool giải nén RAR. Vui lòng dùng file ZIP.")
-            except Exception as e:
-                raise Exception(f"Không thể giải nén RAR: {e}")
+            except Exception:
+                import traceback, sys
+                print(traceback.format_exc(), file=sys.stderr, flush=True)
+                raise
         else:
             with zipfile.ZipFile(zip_path, "r") as zf:
                 zf.extractall(extract_to)
@@ -103,7 +99,11 @@ class ProductUploader:
 
         products = []
 
-        for folder_name in sorted([f for f in os.listdir(root)]):
+        for folder_name in sorted(os.listdir(root)):
+            try:
+                folder_name = folder_name.encode('utf-8', errors='surrogateescape').decode('utf-8', errors='replace')
+            except Exception:
+                pass
             folder_path = os.path.join(root, folder_name)
             if not os.path.isdir(folder_path):
                 continue
