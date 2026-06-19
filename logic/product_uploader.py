@@ -57,16 +57,16 @@ class ProductUploader:
                 import subprocess
                 result = subprocess.run(
                     ["/usr/bin/unar", "-o", extract_to, "-force-overwrite", zip_path],
-                    capture_output=True, text=True
+                    capture_output=True
                 )
                 if result.returncode != 0:
                     # Fallback: dùng unrar
                     result2 = subprocess.run(
                         ["/usr/bin/unrar", "x", "-y", zip_path, extract_to + "/"],
-                        capture_output=True, text=True
+                        capture_output=True
                     )
                     if result2.returncode != 0:
-                        raise Exception(result2.stderr[:200])
+                        raise Exception(result2.stderr.decode("utf-8", errors="replace")[:200])
             except FileNotFoundError:
                 raise Exception("Không tìm thấy tool giải nén RAR. Vui lòng dùng file ZIP.")
             except Exception as e:
