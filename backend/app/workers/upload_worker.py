@@ -43,7 +43,7 @@ def task_upload_products(self, job_id: int, zip_path: str, options: dict,
         result   = uploader.upload_products(zip_path, options)
 
         # Retry sản phẩm lỗi
-        first_errors = result.get("errors", [])
+        first_errors = [e for e in result.get("errors", []) if "Trùng slug" not in str(e.get("error","")) and "Trùng title" not in str(e.get("error",""))]
         retry_ok, retry_errors = [], []
         if first_errors:
             _update_job(job_id, "running", f"⚠️ {len(first_errors)} SP lỗi, retry sau 10s...")
