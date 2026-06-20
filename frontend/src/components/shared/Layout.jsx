@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../../store/auth'
-import { Upload, FileText, Star, Settings, Users, LogOut, Package, Link, Activity, Store, Download } from 'lucide-react'
+import { Upload, FileText, Star, Settings, Users, LogOut, Package, Link, Activity, Store, Download, Send } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const NAV = [
@@ -9,6 +9,7 @@ const NAV = [
   { to: '/review',        label: 'Fake Review',   icon: Star     },
   { to: '/internal-link', label: 'Internal Link', icon: Link     },
   { to: '/export-links',   label: 'Export Links',   icon: Download  },
+  { to: '/submit-index',   label: 'Submit Index',   icon: Send      },
 ]
 const ADMIN_NAV = [
   { to: '/admin/users',    label: 'Quản lý User',  icon: Users    },

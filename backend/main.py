@@ -29,6 +29,8 @@ app.include_router(admin.router)
 app.include_router(jobs.router)
 app.include_router(products.router)
 app.include_router(links.router)
+from app.routers import gsc
+app.include_router(gsc.router)
 
 
 @app.on_event("startup")

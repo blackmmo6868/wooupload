@@ -10,6 +10,7 @@ import SEOPage           from './pages/SEOPage'
 import ReviewPage        from './pages/ReviewPage'
 import InternalLinkPage  from './pages/InternalLinkPage'
 import ExportLinksPage   from './pages/ExportLinksPage'
+import SubmitIndexPage   from './pages/SubmitIndexPage'
 import AdminUsersPage    from './pages/admin/UsersPage'
 import AdminSettingsPage from './pages/admin/SettingsPage'
 import JobManagerPage    from './pages/admin/JobManagerPage'
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/seo"           element={<ProtectedRoute><SEOPage /></ProtectedRoute>} />
         <Route path="/review"        element={<ProtectedRoute><ReviewPage /></ProtectedRoute>} />
         <Route path="/export-links" element={<Layout><ExportLinksPage/></Layout>}/>
+        <Route path="/submit-index" element={<Layout><SubmitIndexPage/></Layout>}/>
               <Route path="/internal-link" element={<ProtectedRoute><InternalLinkPage /></ProtectedRoute>} />
         <Route path="/admin/users"    element={<ProtectedRoute adminOnly><AdminUsersPage /></ProtectedRoute>} />
         <Route path="/admin/stores"   element={<ProtectedRoute adminOnly><StoresPage /></ProtectedRoute>} />
