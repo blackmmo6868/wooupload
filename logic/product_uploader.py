@@ -95,7 +95,13 @@ class ProductUploader:
         items    = os.listdir(root)
         subdirs  = [d for d in items if os.path.isdir(os.path.join(root, d))]
         if len(subdirs) == 1 and len(items) == 1:
-            root = os.path.join(root, subdirs[0])
+            # Chỉ bóc wrapper folder nếu bên trong subdir đó CŨNG là thư mục
+            # (không phải file ảnh trực tiếp — tránh nhầm sản phẩm 1-folder thành wrapper)
+            inner_path  = os.path.join(root, subdirs[0])
+            inner_items = os.listdir(inner_path)
+            inner_has_subdir = any(os.path.isdir(os.path.join(inner_path, i)) for i in inner_items)
+            if inner_has_subdir:
+                root = inner_path
 
         products = []
 
@@ -455,13 +461,7 @@ class ProductUploader:
             existing_titles = set()
 
             if skip_duplicates:
-                self._progress(8, 100, "🔍 Đang tải danh sách sản phẩm hiện có...")
-
-                dup_data = self.wc_api.fetch_existing_slugs(
-                    progress_fn=lambda msg: self._progress(8, 100, msg)
-                )
-                existing_slugs  = dup_data["slugs"]
-                existing_titles = dup_data["titles"]
+                self._progress(10, 100, "✅ Bắt đầu upload (check trùng slug real-time)...")
                 self._progress(10, 100,
                     f"✅ Đã tải {dup_data['count']} sản phẩm — bắt đầu upload...")
 
@@ -476,7 +476,10 @@ class ProductUploader:
                     product_slug  = product["slug"].lower()
                     product_title = title.lower()
 
-                    if product_slug in existing_slugs:
+                    slug_exists = (product_slug in existing_slugs) or \
+                                  self.wc_api.check_slug_exists(product_slug)
+                    if slug_exists:
+                        existing_slugs.add(product_slug)
                         print(f"⚠ [{i+1}/{n}] TRÙNG SLUG: {title} (slug: {product_slug})")
                         self._progress(pct, 100,
                             f"⚠ [{i+1}/{n}] Bỏ qua (trùng slug): {title}")

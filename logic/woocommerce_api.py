@@ -252,6 +252,21 @@ class WooCommerceAPI:
             "count":  len(all_products),
         }
 
+
+    def check_slug_exists(self, slug: str) -> bool:
+        """Check real-time xem slug da ton tai tren store chua."""
+        try:
+            r = requests.get(
+                f"{self._wc_base}/products",
+                auth=self._auth,
+                params={"slug": slug, "_fields": "id,slug", "per_page": 1},
+                timeout=15,
+            )
+            r.raise_for_status()
+            return len(r.json()) > 0
+        except Exception:
+            return False
+
     def create_product(self, product_data: dict) -> dict:
         try:
             r = requests.post(
