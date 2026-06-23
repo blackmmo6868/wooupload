@@ -462,9 +462,6 @@ class ProductUploader:
 
             if skip_duplicates:
                 self._progress(10, 100, "✅ Bắt đầu upload (check trùng slug real-time)...")
-                self._progress(10, 100,
-                    f"✅ Đã tải {dup_data['count']} sản phẩm — bắt đầu upload...")
-
             n = len(products)
             for i, product in enumerate(products):
                 pct = 10 + int((i / n) * 88)
@@ -490,7 +487,10 @@ class ProductUploader:
                         })
                         continue
 
-                    if product_title in existing_titles:
+                    title_exists = (product_title in existing_titles) or \
+                                   self.wc_api.check_slug_exists(product["slug"].lower())
+                    if title_exists:
+                        existing_titles.add(product_title)
                         print(f"⚠ [{i+1}/{n}] TRÙNG TITLE: {title}")
                         self._progress(pct, 100,
                             f"⚠ [{i+1}/{n}] Bỏ qua (trùng title): {title}")
