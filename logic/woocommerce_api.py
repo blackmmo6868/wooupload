@@ -268,22 +268,30 @@ class WooCommerceAPI:
             return False
 
     def create_product(self, product_data: dict) -> dict:
-        try:
-            r = requests.post(
-                f"{self._wc_base}/products",
-                auth=self._auth, json=product_data, timeout=60
-            )
-            r.raise_for_status()
-            return {"success": True, "product": r.json()}
-        except requests.exceptions.HTTPError as e:
+        import time
+        last_error = ""
+        for attempt in range(3):
             try:
-                err = e.response.json()
-                msg = err.get("message", str(e))
-            except Exception:
-                msg = str(e)
-            return {"success": False, "error": msg}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+                r = requests.post(
+                    f"{self._wc_base}/products",
+                    auth=self._auth, json=product_data, timeout=60
+                )
+                r.raise_for_status()
+                return {"success": True, "product": r.json()}
+            except requests.exceptions.HTTPError as e:
+                try:
+                    err = e.response.json()
+                    last_error = err.get("message", str(e))
+                except Exception:
+                    last_error = str(e)
+                # Không retry nếu lỗi business logic (slug trùng, thiếu field...)
+                if "already exists" in last_error or "required" in last_error.lower():
+                    return {"success": False, "error": last_error}
+            except Exception as e:
+                last_error = str(e)
+            if attempt < 2:
+                time.sleep(3 * (attempt + 1))
+        return {"success": False, "error": last_error}
 
     def update_product(self, product_id: int, data: dict) -> dict:
         try:
