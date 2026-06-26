@@ -283,7 +283,8 @@ class WooCommerceAPI:
                     err = e.response.json()
                     last_error = err.get("message", str(e))
                 except Exception:
-                    last_error = str(e)
+                    last_error = e.response.text[:200] if hasattr(e, 'response') and e.response else str(e)
+                print(f"[create_product] attempt={attempt} error={last_error} status={e.response.status_code if hasattr(e,'response') and e.response else 'N/A'}")
                 # Không retry nếu lỗi business logic (slug trùng, thiếu field...)
                 if "already exists" in last_error or "required" in last_error.lower():
                     return {"success": False, "error": last_error}
@@ -306,6 +307,8 @@ class WooCommerceAPI:
                 msg = e.response.json().get("message", str(e))
             except Exception:
                 msg = str(e)
+            status = e.response.status_code if hasattr(e, "response") and e.response else "N/A"
+            print("[upload_media ERROR] status=" + str(status) + " msg=" + str(msg) + " file=" + str(file_path))
             return {"success": False, "error": msg}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -387,7 +390,6 @@ class WooCommerceAPI:
                 headers={
                     "Content-Disposition": f'attachment; filename="{filename}"',
                     "Content-Type":        content_type,
-                    "Content-Length":      str(len(file_data)),
                 },
                 data=file_data,
                 timeout=120,

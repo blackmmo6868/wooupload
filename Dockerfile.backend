@@ -1,5 +1,7 @@
 FROM python:3.10-slim
-RUN apt-get update && apt-get install -y gcc libpq-dev unar unrar-free p7zip-full unzip curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y gcc libpq-dev unar p7zip-full unzip curl && \
+    apt-get install -y unrar || (echo "deb http://deb.debian.org/debian bookworm non-free" >> /etc/apt/sources.list && apt-get update && apt-get install -y unrar) && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
