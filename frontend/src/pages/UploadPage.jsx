@@ -220,6 +220,7 @@ export default function UploadPage() {
   const [skipDup, setSkipDup]           = useState(true)
   const [brandId, setBrandId]           = useState('')
   const [brandName, setBrandName]       = useState('')
+  const [brandTaxonomy, setBrandTaxonomy] = useState('pwb-brand')
   const [tags, setTags]                 = useState([])
   const [tagInput, setTagInput]         = useState('')
 
@@ -332,7 +333,7 @@ export default function UploadPage() {
       fd.append('skip_duplicates', skipDup)
       fd.append('brand_name', brandName)
       fd.append('brand_id', brandId)
-      fd.append('brand_taxonomy', 'pwb-brand')
+      fd.append('brand_taxonomy', brandTaxonomy)
       fd.append('image_config', JSON.stringify({
         enabled:     imgEnabled,
         max_width:   imgMaxWidth,
@@ -372,7 +373,7 @@ export default function UploadPage() {
 
   const handleSelectStore = (s) => {
     setSelectedStore(s)
-    setSelectedCats([]); setWcpaForm(''); setBrandId(''); setBrands([])
+    setSelectedCats([]); setWcpaForm(''); setBrandId(''); setBrands([]); setBrandTaxonomy('pwb-brand')
     setCategories([]); setForms([])
   }
 
@@ -555,7 +556,7 @@ export default function UploadPage() {
           <div className="space-y-1">
             <label className="block text-sm font-medium text-gray-700">Brand</label>
             <select value={brandId}
-              onChange={e => { setBrandId(e.target.value); const b = brands.find(x => String(x.id) === e.target.value); if(b) setBrandName(b.name) }}
+              onChange={e => { setBrandId(e.target.value); const b = brands.find(x => String(x.id) === e.target.value); if(b) { setBrandName(b.name); setBrandTaxonomy(b.taxonomy || 'pwb-brand') } }}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:border-brand bg-white">
               <option value="">-- Không gán Brand --</option>
               {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}

@@ -158,12 +158,28 @@ def list_brands(
 ):
     wc_url, wp_user, wp_pass = _get_wc_config(user, store_id)
     auth = HTTPBasicAuth(wp_user, wp_pass)
+    BRAND_SLUGS = ["pwb-brand", "product_brand", "yith_product_brand", "brand", "product-brand"]
+    # Auto-detect taxonomy
+    detected_slug = None
+    for slug in BRAND_SLUGS:
+        try:
+            r = _req.get(
+                f"{wc_url.rstrip('/')}/wp-json/wp/v2/{slug}",
+                auth=auth, params={"per_page": 1}, timeout=10
+            )
+            if r.status_code == 200 and isinstance(r.json(), list):
+                detected_slug = slug
+                break
+        except Exception:
+            continue
+    if not detected_slug:
+        return []
     all_brands = []
     page = 1
     while True:
         try:
             r = _req.get(
-                f"{wc_url.rstrip('/')}/wp-json/wp/v2/pwb-brand",
+                f"{wc_url.rstrip('/')}/wp-json/wp/v2/{detected_slug}",
                 auth=auth, params={"per_page": 100, "page": page}, timeout=10
             )
             if r.status_code != 200: break
@@ -174,7 +190,7 @@ def list_brands(
             page += 1
         except Exception:
             break
-    return [{"id": b["id"], "name": b["name"], "slug": b["slug"]} for b in all_brands]
+    return [{"id": b["id"], "name": b["name"], "slug": b["slug"], "taxonomy": detected_slug} for b in all_brands]
 
 
 @router.get("/wcpa-forms")

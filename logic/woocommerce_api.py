@@ -380,16 +380,18 @@ class WooCommerceAPI:
 
         try:
             with open(file_path, "rb") as f:
-                r = requests.post(
-                    f"{self._wp_base}/media",
-                    auth=self._auth,
-                    headers={
-                        "Content-Disposition": f'attachment; filename="{filename}"',
-                        "Content-Type":        content_type,
-                    },
-                    data=f,
-                    timeout=120,
-                )
+                file_data = f.read()
+            r = requests.post(
+                f"{self._wp_base}/media",
+                auth=self._auth,
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Content-Type":        content_type,
+                    "Content-Length":      str(len(file_data)),
+                },
+                data=file_data,
+                timeout=120,
+            )
             r.raise_for_status()
             media = r.json()
 
