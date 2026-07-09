@@ -164,13 +164,23 @@ async def start_review(
     db:   Session = Depends(get_db),
     user: User    = Depends(get_current_user),
 ):
-    if not user.store:
+    if not user.is_admin and not user.store:
         raise HTTPException(status_code=400, detail="Tài khoản chưa được gán Store. Liên hệ Admin.")
     ids = json.loads(product_ids)
     cfg = json.loads(config)
     wc_url, wc_user, wc_pass = _get_wc_config(user, store_id)
     job = _create_job(db, user, "review", {"product_ids": ids, "uploader": user.username, "store_id": store_id, "store_url": wc_url})
-    task_review_bulk.apply_async(args=[job.id, ids, cfg, wc_url, wc_user, wc_pass], queue="celery")
+    review_count     = cfg.get("review_count", 10)
+    review_count_min = cfg.get("review_count_min", 5)
+    review_count_max = cfg.get("review_count_max", 15)
+    start_date       = cfg.get("start_date", "")
+    end_date         = cfg.get("end_date", "")
+    dist_5           = cfg.get("dist_5", 80)
+    dist_4           = cfg.get("dist_4", 15)
+    dist_3           = cfg.get("dist_3", 5)
+    delay_between    = cfg.get("delay_between", 2.5)
+    skip_has_review  = cfg.get("skip_has_review", True)
+    task_review_bulk.apply_async(args=[job.id, ids, review_count, review_count_min, review_count_max, start_date, end_date, dist_5, dist_4, dist_3, delay_between, skip_has_review, wc_url, wc_user, wc_pass], queue="celery")
     return {"job_id": job.id, "ok": True}
 
 

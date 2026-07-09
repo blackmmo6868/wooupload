@@ -455,13 +455,21 @@ class ProductUploader:
             if not products:
                 raise Exception("Không tìm thấy sản phẩm nào trong ZIP!")
 
-            # ── Duplicate check — pre-fetch một lần, check offline ────────────
+            # ── Duplicate check — pre-fetch MỘT LẦN, check offline ────────────
             skip_duplicates = options.get("skip_duplicates", False)
             existing_slugs  = set()
             existing_titles = set()
 
             if skip_duplicates:
-                self._progress(10, 100, "✅ Bắt đầu upload (check trùng slug real-time)...")
+                self._progress(8, 100, "🔎 Đang tải danh sách slug/title hiện có (1 lần)...")
+                _pre = self.wc_api.fetch_existing_slugs(
+                    progress_fn=lambda m: self._progress(8, 100, m)
+                )
+                existing_slugs  = _pre.get("slugs", set())
+                existing_titles = _pre.get("titles", set())
+                self._progress(10, 100,
+                    f"✅ Đã nạp {len(existing_slugs)} slug + {len(existing_titles)} title. "
+                    f"Bắt đầu upload (check trùng offline)...")
             n = len(products)
             for i, product in enumerate(products):
                 pct = 10 + int((i / n) * 88)
@@ -473,10 +481,11 @@ class ProductUploader:
                     product_slug  = product["slug"].lower()
                     product_title = title.lower()
 
-                    slug_exists = (product_slug in existing_slugs) or \
-                                  self.wc_api.check_slug_exists(product_slug)
-                    if slug_exists:
-                        existing_slugs.add(product_slug)
+                    # Check offline trước, nếu không có thì real-time check
+                    if product_slug not in existing_slugs:
+                        if self.wc_api.check_slug_exists(product_slug):
+                            existing_slugs.add(product_slug)
+                    if product_slug in existing_slugs:
                         print(f"⚠ [{i+1}/{n}] TRÙNG SLUG: {title} (slug: {product_slug})")
                         self._progress(pct, 100,
                             f"⚠ [{i+1}/{n}] Bỏ qua (trùng slug): {title}")
@@ -487,10 +496,7 @@ class ProductUploader:
                         })
                         continue
 
-                    title_exists = (product_title in existing_titles) or \
-                                   self.wc_api.check_slug_exists(product["slug"].lower())
-                    if title_exists:
-                        existing_titles.add(product_title)
+                    if product_title in existing_titles:
                         print(f"⚠ [{i+1}/{n}] TRÙNG TITLE: {title}")
                         self._progress(pct, 100,
                             f"⚠ [{i+1}/{n}] Bỏ qua (trùng title): {title}")
