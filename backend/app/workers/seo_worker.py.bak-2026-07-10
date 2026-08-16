@@ -146,7 +146,7 @@ def task_seo_bulk(self, job_id: int, product_ids: list,
             _update_job(job_id, "running", f"❌ [{i+1}/{total}] Lỗi: {name} — {err}")
 
         # Nghỉ giữa mỗi sản phẩm để breaktees không bị dồn request (giảm 503/nghẽn)
-        time.sleep(1.5)
+        time.sleep(0.5)
 
     summary = {"total": total, "done": done, "failed": failed,
                "skipped": skipped, "errors": errors[:20]}

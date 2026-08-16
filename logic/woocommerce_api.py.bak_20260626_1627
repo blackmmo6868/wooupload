@@ -294,38 +294,6 @@ class WooCommerceAPI:
                 time.sleep(3 * (attempt + 1))
         return {"success": False, "error": last_error}
 
-    def create_product_variations_batch(self, product_id: int, variations: list) -> dict:
-        """
-        Tạo nhiều variation cùng lúc qua WooCommerce REST API:
-        POST /products/{id}/variations/batch  { "create": [...] }
-        Returns {"success": True, "created": [...], "errors": [...]}
-        """
-        import time
-        last_error = ""
-        for attempt in range(3):
-            try:
-                r = requests.post(
-                    f"{self._wc_base}/products/{product_id}/variations/batch",
-                    auth=self._auth, json={"create": variations}, timeout=90
-                )
-                r.raise_for_status()
-                data = r.json()
-                created = data.get("create", [])
-                errors  = [c for c in created if c.get("error")]
-                return {"success": True, "created": created, "errors": errors}
-            except requests.exceptions.HTTPError as e:
-                try:
-                    err = e.response.json()
-                    last_error = err.get("message", str(e))
-                except Exception:
-                    last_error = e.response.text[:200] if hasattr(e, 'response') and e.response else str(e)
-                print(f"[create_product_variations_batch] attempt={attempt} error={last_error}")
-            except Exception as e:
-                last_error = str(e)
-            if attempt < 2:
-                time.sleep(3 * (attempt + 1))
-        return {"success": False, "error": last_error, "created": [], "errors": []}
-
     def update_product(self, product_id: int, data: dict) -> dict:
         try:
             r = requests.put(
@@ -339,8 +307,6 @@ class WooCommerceAPI:
                 msg = e.response.json().get("message", str(e))
             except Exception:
                 msg = str(e)
-            status = e.response.status_code if hasattr(e, "response") and e.response else "N/A"
-            print("[upload_media ERROR] status=" + str(status) + " msg=" + str(msg) + " file=" + str(file_path))
             return {"success": False, "error": msg}
         except Exception as e:
             return {"success": False, "error": str(e)}
@@ -422,6 +388,7 @@ class WooCommerceAPI:
                 headers={
                     "Content-Disposition": f'attachment; filename="{filename}"',
                     "Content-Type":        content_type,
+                    "Content-Length":      str(len(file_data)),
                 },
                 data=file_data,
                 timeout=120,

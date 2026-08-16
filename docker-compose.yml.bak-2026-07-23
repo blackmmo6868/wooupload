@@ -49,7 +49,7 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     restart: always
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=1 --queues=celery --hostname=default@%h
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2 --queues=celery --hostname=default@%h
     env_file: .env
     environment:
       DATABASE_URL: postgresql://woommo:${POSTGRES_PASSWORD}@postgres:5432/woommo

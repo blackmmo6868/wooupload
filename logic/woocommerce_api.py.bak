@@ -117,6 +117,77 @@ class WooCommerceAPI:
         except Exception as e:
             return {"success": False, "error": str(e)}
 
+    def get_products_by_ids(self, product_ids: list, status: str = "any") -> list:
+        """
+        Fetch CHỈ các sản phẩm theo ID cần thiết, dùng ?include=.
+        Thay cho get_all_products() rồi lọc — giảm từ N trang xuống ~1 request/100 ID.
+        Tránh kéo toàn bộ store về mỗi job SEO (nguyên nhân đập MySQL breaktees).
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        FIELDS = "id,name,description,status,categories,images"
+        if not product_ids:
+            return []
+
+        ids = list(product_ids)
+        # WooCommerce include= nhận tối đa ~100 ID/lần → chia chunk 100
+        chunks = [ids[i:i + 100] for i in range(0, len(ids), 100)]
+
+        def fetch_chunk(chunk: list) -> list:
+            try:
+                r = requests.get(
+                    f"{self._wc_base}/products",
+                    auth=self._auth,
+                    params={
+                        "include":  ",".join(str(x) for x in chunk),
+                        "per_page": 100,
+                        "status":   status,
+                        "_fields":  FIELDS,
+                    },
+                    timeout=60,
+                )
+                r.raise_for_status()
+                return r.json()
+            except Exception as e:
+                print(f"[get_products_by_ids] chunk error: {e}")
+                return []
+
+        results = []
+        if len(chunks) == 1:
+            results = fetch_chunk(chunks[0])
+        else:
+            with ThreadPoolExecutor(max_workers=3) as ex:
+                futs = [ex.submit(fetch_chunk, c) for c in chunks]
+                for f in as_completed(futs):
+                    results.extend(f.result())
+        return results
+
+    def batch_update_products(self, updates: list) -> dict:
+        """
+        Cập nhật nhiều sản phẩm trong 1 request qua products/batch.
+        updates = [{"id": 123, "status": "publish"}, ...]  (tối đa 100/lần)
+        Thay cho vòng lặp update_product từng cái (N request → 1 request/100).
+        """
+        if not updates:
+            return {"success": True, "updated": 0}
+        ups = list(updates)
+        chunks = [ups[i:i + 100] for i in range(0, len(ups), 100)]
+        total = 0
+        for chunk in chunks:
+            try:
+                r = requests.post(
+                    f"{self._wc_base}/products/batch",
+                    auth=self._auth,
+                    json={"update": chunk},
+                    timeout=120,
+                )
+                r.raise_for_status()
+                total += len(r.json().get("update", []))
+            except Exception as e:
+                print(f"[batch_update_products] error: {e}")
+                return {"success": False, "error": str(e), "updated": total}
+        return {"success": True, "updated": total}
+
     def get_all_products(self, status: str = "any") -> list:
         """
         Fetch tất cả sản phẩm với tối ưu tốc độ:
@@ -293,38 +364,6 @@ class WooCommerceAPI:
             if attempt < 2:
                 time.sleep(3 * (attempt + 1))
         return {"success": False, "error": last_error}
-
-    def create_product_variations_batch(self, product_id: int, variations: list) -> dict:
-        """
-        Tạo nhiều variation cùng lúc qua WooCommerce REST API:
-        POST /products/{id}/variations/batch  { "create": [...] }
-        Returns {"success": True, "created": [...], "errors": [...]}
-        """
-        import time
-        last_error = ""
-        for attempt in range(3):
-            try:
-                r = requests.post(
-                    f"{self._wc_base}/products/{product_id}/variations/batch",
-                    auth=self._auth, json={"create": variations}, timeout=90
-                )
-                r.raise_for_status()
-                data = r.json()
-                created = data.get("create", [])
-                errors  = [c for c in created if c.get("error")]
-                return {"success": True, "created": created, "errors": errors}
-            except requests.exceptions.HTTPError as e:
-                try:
-                    err = e.response.json()
-                    last_error = err.get("message", str(e))
-                except Exception:
-                    last_error = e.response.text[:200] if hasattr(e, 'response') and e.response else str(e)
-                print(f"[create_product_variations_batch] attempt={attempt} error={last_error}")
-            except Exception as e:
-                last_error = str(e)
-            if attempt < 2:
-                time.sleep(3 * (attempt + 1))
-        return {"success": False, "error": last_error, "created": [], "errors": []}
 
     def update_product(self, product_id: int, data: dict) -> dict:
         try:

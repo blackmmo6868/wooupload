@@ -247,26 +247,12 @@ class ProductUploader:
             sku       = f"{prefix}-{rand_part}"
 
         # ── 5. Build WooCommerce payload ───────────────────────────────────────
-        # Style variations: mỗi ảnh (đại diện + gallery, theo đúng thứ tự) = 1 Style
-        # riêng để khách chọn trên trang sản phẩm (Variable product).
-        style_variations = bool(options.get("style_variations")) and len(images) >= 2
-        all_image_ids     = ([featured_id] if featured_id else []) + gallery_ids
-
         wc_data = {
             "name":   title,
-            "type":   "variable" if style_variations else "simple",
+            "type":   "simple",
             "status": options.get("status", "draft"),
             "images": images,
         }
-
-        if style_variations:
-            wc_data["attributes"] = [{
-                "name":      "Style",
-                "position":  0,
-                "visible":   True,
-                "variation": True,
-                "options":   [f"Style {i+1}" for i in range(len(all_image_ids))],
-            }]
 
         if sku:
             wc_data["sku"] = sku
@@ -306,10 +292,6 @@ class ProductUploader:
         product = result["product"]
         product_id = product.get("id")
 
-        # ── 7b. Tạo variation cho từng Style (mỗi ảnh = 1 Style) ────────────────
-        if product_id and style_variations:
-            self._create_style_variations(product_id, all_image_ids, sku, options, title)
-
         # ── 8. Set post_parent → ảnh hiện "Uploaded to" trong Media Library ─────
         # WP REST API PATCH /wp/v2/media/{id} với {"post": product_id}
         # Code cũ dùng custom plugin woommo-simple.php để làm điều này;
@@ -332,44 +314,6 @@ class ProductUploader:
             )
 
         return product
-
-    def _create_style_variations(self, product_id: int, image_ids: list, sku: str, options: dict, title: str):
-        """
-        Tạo 1 variation cho mỗi ảnh trong image_ids (theo đúng thứ tự:
-        ảnh đại diện trước, rồi gallery), đặt tên "Style 1", "Style 2", ...
-        Mỗi variation dùng chính ảnh đó làm ảnh riêng → khách tick chọn Style
-        nào sẽ thấy ảnh đó trên trang sản phẩm.
-        """
-        variations = []
-        for i, img_id in enumerate(image_ids):
-            if not img_id:
-                continue
-            var = {
-                "attributes": [{"name": "Style", "option": f"Style {i+1}"}],
-                "image": {"id": img_id},
-            }
-            if sku:
-                var["sku"] = f"{sku}-{i+1}"
-            if options.get("regular_price"):
-                var["regular_price"] = str(options["regular_price"])
-            if options.get("sale_price"):
-                var["sale_price"] = str(options["sale_price"])
-            variations.append(var)
-
-        if not variations:
-            return
-
-        result = self.wc_api.create_product_variations_batch(product_id, variations)
-        if result.get("success"):
-            n_err = len(result.get("errors", []))
-            n_ok  = len(result.get("created", [])) - n_err
-            print(f"[Style] ✓ Product #{product_id} ({title}): {n_ok} variation(s) tạo OK"
-                  + (f", {n_err} lỗi" if n_err else ""))
-            if n_err:
-                for c in result["errors"]:
-                    print(f"[Style] ✗ {c.get('option', c)}: {c.get('error')}")
-        else:
-            print(f"[Style] ✗ Product #{product_id} ({title}): tạo variation thất bại — {result.get('error')}")
 
     def _attach_images_to_product(self, media_ids: list, product_id: int, title: str):
         """

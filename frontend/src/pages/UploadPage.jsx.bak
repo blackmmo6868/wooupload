@@ -224,9 +224,6 @@ export default function UploadPage() {
   const [tags, setTags]                 = useState([])
   const [tagInput, setTagInput]         = useState('')
 
-  // Style variations (mỗi ảnh = 1 Style để khách tick chọn)
-  const [styleVariations, setStyleVariations] = useState(false)
-
   // Image processing
   const [imgEnabled, setImgEnabled]   = useState(false)
   const [skuPrefix, setSkuPrefix]       = useState('')
@@ -333,7 +330,6 @@ export default function UploadPage() {
       fd.append('tags', JSON.stringify(tags))
       fd.append('wcpa_form_id', wcpaForm)
       fd.append('optimize_images', false)
-      fd.append('style_variations', styleVariations)
       fd.append('skip_duplicates', skipDup)
       fd.append('brand_name', brandName)
       fd.append('brand_id', brandId)
@@ -603,30 +599,6 @@ export default function UploadPage() {
           <input type="checkbox" checked={skipDup} onChange={e => setSkipDup(e.target.checked)} className="rounded"/>
           Bỏ qua sản phẩm trùng (slug/title)
         </label>
-
-        {/* ── Style Variations ── */}
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-3 p-4 bg-gray-50">
-            <span className="text-lg">🎨</span>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-gray-800">Biến thể Style (mỗi ảnh = 1 Style)</p>
-              <p className="text-xs text-gray-500">
-                Bật thì tạo Variable product: ảnh đại diện + từng ảnh gallery trong mỗi folder
-                sẽ thành 1 Style riêng (Style 1, Style 2, ...) để khách tick chọn trên trang sản phẩm.
-                Tắt thì tạo Simple product như bình thường.
-              </p>
-            </div>
-            <Toggle checked={styleVariations} onChange={setStyleVariations} disabled={false}/>
-          </div>
-          {styleVariations && (
-            <div className="px-4 pb-4 pt-1 border-t border-gray-100">
-              <p className="text-xs text-amber-600">
-                ⚠ Cần ít nhất 2 ảnh/folder (1 đại diện + 1 gallery trở lên) thì mới tạo variation.
-                Folder chỉ có 1 ảnh vẫn lên Simple product bình thường.
-              </p>
-            </div>
-          )}
-        </div>
 
         {/* ── Image Processing ── */}
         <div className="border border-gray-200 rounded-xl overflow-hidden">

@@ -86,7 +86,6 @@ async def start_upload(
     brand_taxonomy:      str  = Form("pwb-brand"),
     pipeline_config:     str  = Form("{}"),
     image_config:        str  = Form("{}"),
-    style_variations:    bool = Form(False),
     db:   Session = Depends(get_db),
     user: User    = Depends(get_current_user),
 ):
@@ -129,7 +128,6 @@ async def start_upload(
         "tags": json.loads(tags) if tags else [],
         "brand_info": {"taxonomy": brand_taxonomy, "brand_id": int(brand_id)} if brand_id else None,
         "pipeline": pipeline, "image_config": img_cfg, "image_processing": img_cfg,
-        "style_variations": style_variations,
     }
 
     print(f"[DEBUG] primary_category_id={primary_category_id} options_primary={options.get('primary_category_id')}")

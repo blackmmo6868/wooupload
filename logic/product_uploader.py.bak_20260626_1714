@@ -56,11 +56,11 @@ class ProductUploader:
             try:
                 import subprocess
                 result = subprocess.run(
-                    ["unrar", "x", "-y", zip_path, extract_to + "/"],
-                    capture_output=True, text=True
+                    ["/usr/bin/unar", "-o", extract_to, "-force-overwrite", zip_path],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                 )
                 if result.returncode not in (0, 1):
-                    raise Exception(f"unrar failed with code {result.returncode}: " + result.stderr[:200])
+                    raise Exception(f"unar failed with code {result.returncode}")
             except FileNotFoundError:
                 raise Exception("Không tìm thấy tool giải nén RAR. Vui lòng dùng file ZIP.")
             except Exception:
@@ -103,6 +103,7 @@ class ProductUploader:
             if inner_has_subdir:
                 root = inner_path
 
+        print(f"[DEBUG parse] root={root} items={os.listdir(root)}")
         products = []
 
         for folder_name in sorted(os.listdir(root)):
@@ -120,6 +121,7 @@ class ProductUploader:
                 if Path(f).suffix.lower() in IMAGE_EXTS
             ])
 
+            print(f"[DEBUG2] {folder_name} images={all_images} contents={os.listdir(folder_path)}")
             if not all_images:
                 continue
 
@@ -185,7 +187,10 @@ class ProductUploader:
         Upload một ảnh qua WP REST /wp/v2/media.
         Returns {"media_id": int, "url": str} or raises Exception.
         """
+        import os as _os
+        print("[_upload_image] uploading: " + str(image_path) + " size=" + str(_os.path.getsize(image_path)))
         result = self.wc_api.upload_media(image_path, alt_text=alt_text)
+        print("[_upload_image] result: " + str(result))
         if not result["success"]:
             raise Exception(result["error"])
         return {"media_id": result["media_id"], "url": result["url"]}
@@ -205,6 +210,7 @@ class ProductUploader:
         optimize = options.get("optimize_images", False)
 
         # ── 1. Upload featured image ───────────────────────────────────────────
+        print(f"[DEBUG3] featured={featured} exists={os.path.exists(featured) if featured else None}")
         if featured and os.path.exists(featured):
             if optimize:
                 self.optimize_image(featured)
@@ -247,26 +253,12 @@ class ProductUploader:
             sku       = f"{prefix}-{rand_part}"
 
         # ── 5. Build WooCommerce payload ───────────────────────────────────────
-        # Style variations: mỗi ảnh (đại diện + gallery, theo đúng thứ tự) = 1 Style
-        # riêng để khách chọn trên trang sản phẩm (Variable product).
-        style_variations = bool(options.get("style_variations")) and len(images) >= 2
-        all_image_ids     = ([featured_id] if featured_id else []) + gallery_ids
-
         wc_data = {
             "name":   title,
-            "type":   "variable" if style_variations else "simple",
+            "type":   "simple",
             "status": options.get("status", "draft"),
             "images": images,
         }
-
-        if style_variations:
-            wc_data["attributes"] = [{
-                "name":      "Style",
-                "position":  0,
-                "visible":   True,
-                "variation": True,
-                "options":   [f"Style {i+1}" for i in range(len(all_image_ids))],
-            }]
 
         if sku:
             wc_data["sku"] = sku
@@ -306,10 +298,6 @@ class ProductUploader:
         product = result["product"]
         product_id = product.get("id")
 
-        # ── 7b. Tạo variation cho từng Style (mỗi ảnh = 1 Style) ────────────────
-        if product_id and style_variations:
-            self._create_style_variations(product_id, all_image_ids, sku, options, title)
-
         # ── 8. Set post_parent → ảnh hiện "Uploaded to" trong Media Library ─────
         # WP REST API PATCH /wp/v2/media/{id} với {"post": product_id}
         # Code cũ dùng custom plugin woommo-simple.php để làm điều này;
@@ -332,44 +320,6 @@ class ProductUploader:
             )
 
         return product
-
-    def _create_style_variations(self, product_id: int, image_ids: list, sku: str, options: dict, title: str):
-        """
-        Tạo 1 variation cho mỗi ảnh trong image_ids (theo đúng thứ tự:
-        ảnh đại diện trước, rồi gallery), đặt tên "Style 1", "Style 2", ...
-        Mỗi variation dùng chính ảnh đó làm ảnh riêng → khách tick chọn Style
-        nào sẽ thấy ảnh đó trên trang sản phẩm.
-        """
-        variations = []
-        for i, img_id in enumerate(image_ids):
-            if not img_id:
-                continue
-            var = {
-                "attributes": [{"name": "Style", "option": f"Style {i+1}"}],
-                "image": {"id": img_id},
-            }
-            if sku:
-                var["sku"] = f"{sku}-{i+1}"
-            if options.get("regular_price"):
-                var["regular_price"] = str(options["regular_price"])
-            if options.get("sale_price"):
-                var["sale_price"] = str(options["sale_price"])
-            variations.append(var)
-
-        if not variations:
-            return
-
-        result = self.wc_api.create_product_variations_batch(product_id, variations)
-        if result.get("success"):
-            n_err = len(result.get("errors", []))
-            n_ok  = len(result.get("created", [])) - n_err
-            print(f"[Style] ✓ Product #{product_id} ({title}): {n_ok} variation(s) tạo OK"
-                  + (f", {n_err} lỗi" if n_err else ""))
-            if n_err:
-                for c in result["errors"]:
-                    print(f"[Style] ✗ {c.get('option', c)}: {c.get('error')}")
-        else:
-            print(f"[Style] ✗ Product #{product_id} ({title}): tạo variation thất bại — {result.get('error')}")
 
     def _attach_images_to_product(self, media_ids: list, product_id: int, title: str):
         """
@@ -511,21 +461,13 @@ class ProductUploader:
             if not products:
                 raise Exception("Không tìm thấy sản phẩm nào trong ZIP!")
 
-            # ── Duplicate check — pre-fetch MỘT LẦN, check offline ────────────
+            # ── Duplicate check — pre-fetch một lần, check offline ────────────
             skip_duplicates = options.get("skip_duplicates", False)
             existing_slugs  = set()
             existing_titles = set()
 
             if skip_duplicates:
-                self._progress(8, 100, "🔎 Đang tải danh sách slug/title hiện có (1 lần)...")
-                _pre = self.wc_api.fetch_existing_slugs(
-                    progress_fn=lambda m: self._progress(8, 100, m)
-                )
-                existing_slugs  = _pre.get("slugs", set())
-                existing_titles = _pre.get("titles", set())
-                self._progress(10, 100,
-                    f"✅ Đã nạp {len(existing_slugs)} slug + {len(existing_titles)} title. "
-                    f"Bắt đầu upload (check trùng offline)...")
+                self._progress(10, 100, "✅ Bắt đầu upload (check trùng slug real-time)...")
             n = len(products)
             for i, product in enumerate(products):
                 pct = 10 + int((i / n) * 88)
@@ -537,11 +479,10 @@ class ProductUploader:
                     product_slug  = product["slug"].lower()
                     product_title = title.lower()
 
-                    # Check offline trước, nếu không có thì real-time check
-                    if product_slug not in existing_slugs:
-                        if self.wc_api.check_slug_exists(product_slug):
-                            existing_slugs.add(product_slug)
-                    if product_slug in existing_slugs:
+                    slug_exists = (product_slug in existing_slugs) or \
+                                  self.wc_api.check_slug_exists(product_slug)
+                    if slug_exists:
+                        existing_slugs.add(product_slug)
                         print(f"⚠ [{i+1}/{n}] TRÙNG SLUG: {title} (slug: {product_slug})")
                         self._progress(pct, 100,
                             f"⚠ [{i+1}/{n}] Bỏ qua (trùng slug): {title}")
@@ -552,7 +493,10 @@ class ProductUploader:
                         })
                         continue
 
-                    if product_title in existing_titles:
+                    title_exists = (product_title in existing_titles) or \
+                                   self.wc_api.check_slug_exists(product["slug"].lower())
+                    if title_exists:
+                        existing_titles.add(product_title)
                         print(f"⚠ [{i+1}/{n}] TRÙNG TITLE: {title}")
                         self._progress(pct, 100,
                             f"⚠ [{i+1}/{n}] Bỏ qua (trùng title): {title}")
