@@ -604,6 +604,27 @@ def check_forbidden(html: str) -> list[str]:
     return found
 
 
+# ── Licensing claim check — luôn bật, không tắt như FORBIDDEN_PATTERNS ────────
+# Store bán hàng fan-inspired KHÔNG có bản quyền/license thật — không được để
+# AI tự ý claim "official"/"licensed" trong mô tả (rủi ro chính sách quảng cáo
+# + hiểu lầm về bản quyền, không liên quan token/SEO nên luôn check).
+LICENSING_CLAIM_PATTERNS = [
+    r"\bofficial(ly)?\b",
+    r"\blicens(e|ed|ing)\b",
+]
+
+
+def check_licensing_claims(html: str) -> list[str]:
+    """Trả về list các claim 'official/licensed' tìm thấy trong html (luôn check)."""
+    found = []
+    html_lower = html.lower()
+    for pattern in LICENSING_CLAIM_PATTERNS:
+        m = re.search(pattern, html_lower)
+        if m:
+            found.append(f"licensing_claim:{m.group(0)}")
+    return found
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # PRODUCT TYPE DETECTION & CONTEXT
 # ══════════════════════════════════════════════════════════════════════════════
@@ -999,6 +1020,9 @@ FORBIDDEN PHRASES — auto-fail if any appear:
   ✗ ANY variant of "[X] is more than just [clothing/apparel/garment/item of clothing]"
   ✗ "tribute to" / "celebration of" / "perfectly merging" / "standout tee"
   ✗ sizes: NEVER write "S to XXL", "small to XXL", "S through XXL" — sizes are unknown
+  ✗ "official" / "officially licensed" / "official license" / "licensed" / "official merchandise" /
+    "licensed product" — this is independent fan-inspired merchandise, NOT an officially
+    licensed product. NEVER claim or imply official/licensed status anywhere in the copy.
 
 INSTEAD:
   ✓ Specific situations: "If you grew up blasting rock in your room..."
@@ -1115,6 +1139,8 @@ NICHE VOICE:
   General    → confident specific tone
 
 FORBIDDEN: "perfect for making a bold fashion statement" / "a must-have for anyone who loves"
+FORBIDDEN: "official" / "officially licensed" / "licensed" — this is independent fan-inspired
+  merchandise, NOT an officially licensed product. Never imply official/licensed status.
 
 FORMULA: [niche hook ~30c] + [EXACT product name] + from {store_name} + [niche detail ~20c]
 COUNT characters before submitting.
@@ -1375,6 +1401,7 @@ class SEOGenerator:
             niche_v     = check_hook_niche(html, resolved["niche"])
             structure_v = check_structure(html, self.shortcode, product_name)
             anchor_v    = check_anchor_quality(html)
+            license_v   = check_licensing_claims(html)
 
             internal_title = resolved.get("internal_title", "")
             internal_url   = resolved.get("internal_url", "")
@@ -1391,7 +1418,7 @@ class SEOGenerator:
             else:
                 print(f"[SEO] Word count: {wc} words ✓")
 
-            critical_violations = niche_v + structure_v + anchor_v + wc_v
+            critical_violations = niche_v + structure_v + anchor_v + wc_v + license_v
 
             if not critical_violations:
                 return html
@@ -1444,6 +1471,14 @@ class SEOGenerator:
                         f"  - '{product_name} Tee' (suffix too short)\n"
                         f"  - '{product_name} Quality You Can Trust' (generic)\n"
                         f"  Pick a suffix that matches the detected niche: {resolved['niche']}"
+                    )
+
+                if license_v:
+                    instructions.append(
+                        f"LICENSING CLAIM — Found forbidden word(s): {', '.join(v.split(':')[1] for v in license_v)}. "
+                        f"This is independent fan-inspired merchandise, NOT an officially licensed product. "
+                        f"Remove every use of 'official'/'officially'/'license'/'licensed'/'licensing' "
+                        f"anywhere in the HTML — rephrase those sentences without claiming official/licensed status."
                     )
 
                 if anchor_v:
