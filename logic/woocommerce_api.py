@@ -182,6 +182,44 @@ class WooCommerceAPI:
 
         return all_products
 
+    def get_products_by_ids(self, ids: list, status: str = "any") -> list:
+        """
+        Fetch đúng danh sách sản phẩm theo product ID (dùng cho Bulk SEO khi
+        user chỉ chọn 1 vài sản phẩm — nhanh hơn get_all_products() + filter).
+        WooCommerce giới hạn include= tối đa ~100 ID/request nên tự chia batch.
+        """
+        if not ids:
+            return []
+
+        FIELDS = "id,name,description,status,categories,images"
+        products = []
+        seen_ids = set()
+
+        for i in range(0, len(ids), 100):
+            batch = ids[i:i + 100]
+            try:
+                r = requests.get(
+                    f"{self._wc_base}/products",
+                    auth=self._auth,
+                    params={
+                        "include":  ",".join(str(x) for x in batch),
+                        "per_page": len(batch),
+                        "status":   status,
+                        "_fields":  FIELDS,
+                    },
+                    timeout=60,
+                )
+                r.raise_for_status()
+                for p in r.json():
+                    pid = p.get("id")
+                    if pid is not None and pid not in seen_ids:
+                        seen_ids.add(pid)
+                        products.append(p)
+            except Exception as e:
+                print(f"[Products] get_products_by_ids batch {batch}: {e}")
+
+        return products
+
     def fetch_existing_slugs(self, progress_fn=None) -> dict:
         """
         Fetch toàn bộ sản phẩm (chỉ lấy id, name, slug) để check duplicate trước upload.
